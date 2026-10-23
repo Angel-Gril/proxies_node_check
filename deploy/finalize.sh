@@ -1,12 +1,14 @@
 #!/bin/sh
 set -eu
+NODECHECK_DEPLOY_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$NODECHECK_DEPLOY_DIR/common.sh"
 test "$(id -u)" -eq 0
 test -x /opt/nodecheck/venv/bin/gunicorn
 test -x /opt/nodecheck/bin/mihomo
 test -f /etc/nodecheck/app.env
 test -f /etc/nginx/sites-available/nodecheck
-test -f /etc/letsencrypt/live/proxies.20260610.xyz/fullchain.pem
-test -f /etc/letsencrypt/live/proxies.20260610.xyz/privkey.pem
+test -f "/etc/letsencrypt/live/$NODECHECK_DOMAIN/fullchain.pem"
+test -f "/etc/letsencrypt/live/$NODECHECK_DOMAIN/privkey.pem"
 
 # The service reads the EnvironmentFile before dropping privileges; group access
 # keeps the secret out of all other users while allowing the service to start.
@@ -20,13 +22,7 @@ chown root:nodecheck /opt/nodecheck/bin/mihomo
 chmod 0750 /opt/nodecheck/bin/mihomo
 
 install -d -m 0755 /etc/letsencrypt/renewal-hooks/deploy
-cat > /etc/letsencrypt/renewal-hooks/deploy/nodecheck-reload <<'HOOK'
-#!/bin/sh
-set -eu
-if [ "${RENEWED_LINEAGE:-}" = /etc/letsencrypt/live/proxies.20260610.xyz ]; then
-    /usr/sbin/nginx -t && /bin/systemctl reload nginx
-fi
-HOOK
+render_renewal_hook > /etc/letsencrypt/renewal-hooks/deploy/nodecheck-reload
 chmod 0755 /etc/letsencrypt/renewal-hooks/deploy/nodecheck-reload
 
 systemctl daemon-reload
@@ -35,5 +31,5 @@ curl --fail --silent --show-error --max-time 15 http://127.0.0.1:18765/healthz
 nginx -t
 systemctl reload nginx
 sleep 1
-curl --fail --silent --show-error --max-time 15 --resolve proxies.20260610.xyz:443:127.0.0.1 https://proxies.20260610.xyz/login -o /dev/null
+curl --fail --silent --show-error --max-time 15 --resolve "$NODECHECK_DOMAIN:443:127.0.0.1" "https://$NODECHECK_DOMAIN/login" -o /dev/null
 echo 'Nodecheck service and dedicated HTTPS site are ready.'

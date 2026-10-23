@@ -1,6 +1,8 @@
 #!/bin/sh
 # Create only the new application's namespace; leave existing sites untouched.
 set -eu
+NODECHECK_DEPLOY_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+. "$NODECHECK_DEPLOY_DIR/common.sh"
 test "$(id -u)" -eq 0
 test ! -e /opt/nodecheck
 test ! -e /etc/nodecheck
@@ -12,11 +14,11 @@ if ss -H -lnt 'sport = :18765' | grep -q .; then echo 'Port 18765 is occupied; s
 nginx -t
 install -d -m 0755 /opt/nodecheck/app /opt/nodecheck/bin /var/lib/nodecheck-acme/.well-known/acme-challenge
 install -d -m 0700 /etc/nodecheck
-cat > /etc/nginx/sites-available/nodecheck <<'NGINX'
+cat > /etc/nginx/sites-available/nodecheck <<NGINX
 server {
     listen 80;
     listen [::]:80;
-    server_name proxies.20260610.xyz;
+    server_name $NODECHECK_DOMAIN;
     access_log off;
     error_log /dev/null crit;
     location /.well-known/acme-challenge/ { root /var/lib/nodecheck-acme; }
@@ -30,5 +32,5 @@ else
     unlink /etc/nginx/sites-enabled/nodecheck
     exit 1
 fi
-printf 'nodecheck-origin-validation-20261023' > /var/lib/nodecheck-acme/.well-known/acme-challenge/nodecheck-origin-check
+printf 'nodecheck-origin-validation' > /var/lib/nodecheck-acme/.well-known/acme-challenge/nodecheck-origin-check
 echo 'Independent HTTP challenge site prepared; existing apps continue running.'

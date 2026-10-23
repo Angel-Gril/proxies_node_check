@@ -1,10 +1,17 @@
 # 节点检测台
 
-从混合文档中提取代理节点，发起真实 HTTPS 请求，标注状态并导出可用节点。支持本地脚本，也支持登录后上传、测试、下载的网页。
+从混合文档中提取代理节点，发起真实 HTTPS 请求，标注状态并导出可用节点。支持本地命令行、本地网页，以及部署到自己的服务器。
+
+本地脚本直接运行：
+
+```sh
+python -m pip install -r requirements.txt
+python nodecheck.py nodes.txt
+```
 
 ## 网页
 
-部署域名：**https://proxies.20260610.xyz**
+本地网页访问 `http://127.0.0.1:18765`；服务器网页使用部署时通过 `NODECHECK_DOMAIN` 指定的自有域名。
 
 1. 登录后上传一个或多个 TXT、MD、CSV、JSON、YAML 或 DOCX 文件；同一节点在多个文件中出现时只测试一次。
 2. 对没有协议前缀的 `IP:端口:账号:密码`，选择 HTTP 或 SOCKS5。已有前缀的链接按自身协议识别。
@@ -91,7 +98,25 @@ python manage.py serve
 
 访问 `http://127.0.0.1:18765`。`setup` 通过隐藏输入生成密码哈希与会话密钥，保存在 `.private/app.env`；本地启动只绑定 127.0.0.1。
 
-服务器部署使用独立 `/opt/nodecheck`、`/etc/nodecheck`、`nodecheck` 系统用户、`nodecheck.service`、`127.0.0.1:18765` 及 Nginx `nodecheck` 站点；现有服务配置不应改写。`deploy/prepare.sh` 在命名空间/端口已占用时停止，不用于重复覆盖安装。先验证域名挑战文件指向正确服务器，再运行 `deploy/install.sh`。安装脚本需从 `/opt/nodecheck/app` 运行，并预先放置只含哈希的 `/etc/nodecheck/app.env`。
+服务器部署使用独立 `/opt/nodecheck`、`/etc/nodecheck`、`nodecheck` 系统用户、`nodecheck.service`、`127.0.0.1:18765` 及 Nginx `nodecheck` 站点；现有服务配置不应改写。`deploy/prepare.sh` 在命名空间/端口已占用时停止，不用于重复覆盖安装。
+
+首次部署需要 Linux、Nginx、Python 3.10+（含 venv）、curl、certbot，以及指向自己服务器的域名。在 root shell 中从克隆的仓库目录执行，替换下面的示例域名：
+
+```sh
+export NODECHECK_DOMAIN=check.example.com
+sh deploy/prepare.sh
+# 只复制已跟踪的项目文件，账号配置单独生成
+git archive HEAD | tar -x -C /opt/nodecheck/app
+cd /opt/nodecheck/app
+python3 -m venv /opt/nodecheck/venv
+/opt/nodecheck/venv/bin/pip install -r requirements.txt
+/opt/nodecheck/venv/bin/python manage.py setup --env /etc/nodecheck/app.env
+# 应返回 nodecheck-origin-validation，确认域名到达这台服务器
+curl --fail "http://$NODECHECK_DOMAIN/.well-known/acme-challenge/nodecheck-origin-check"
+sh deploy/install.sh
+```
+
+`NODECHECK_DOMAIN` 必须是域名本身，例如 `check.example.com`，不带 `https://`、端口或路径。部署脚本据此生成 Nginx 站点、证书申请和续期钩子；`deploy/nginx.conf` 是带占位符的模板，不能直接复制到 Nginx。每次运行 `prepare.sh`、`install.sh` 或 `finalize.sh` 都需要设置该变量，缺失或格式无效时会在修改服务器之前停止。`finalize.sh` 用于完成已有安装的权限设置、续期钩子和健康检查。
 
 ```sh
 systemctl status nodecheck --no-pager
