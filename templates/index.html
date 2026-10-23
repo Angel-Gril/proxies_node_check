@@ -19,7 +19,7 @@
       <p class="status-copy" id="status-copy" aria-live="polite">选好文件后，点击开始检测。</p>
       <div class="result-stats"><div><span class="small">可用节点</span><strong id="usable-number">—</strong></div><div><span class="small">其他节点</span><strong id="other-number">—</strong></div></div>
       <div class="result-actions"><button id="download-button" class="primary" type="button" disabled>下载结果 ZIP <span aria-hidden="true">↓</span></button><button id="clear-button" class="secondary" type="button" disabled>清理任务</button></div>
-      <p class="retention-note">结果下载后自动清理；未下载的结果最多保留 15 分钟。退出登录会清理当前会话的任务。</p>
+      <p class="retention-note" id="retention-note">下载不会删除结果，可重复下载。确认文件已保存后再清理；页面关闭后结果保留 24 小时。退出登录或服务重启会清空任务。</p>
     </section>
   </div>
   <section class="results-section" id="results-section" hidden><div class="section-heading"><h2>节点结果</h2><span class="small">账号密码已隐藏</span></div><div class="table-scroll"><table><thead><tr><th>节点地址</th><th>状态</th><th>通过检测</th><th>耗时</th><th>出口 IP</th></tr></thead><tbody id="results-body"></tbody></table></div><p class="small" id="parse-note"></p></section>

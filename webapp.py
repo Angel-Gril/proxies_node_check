@@ -19,7 +19,7 @@ import tempfile
 import time
 import zipfile
 
-from flask import Flask, Request, abort, after_this_request, jsonify, redirect, render_template, request, send_file, session, url_for
+from flask import Flask, Request, abort, jsonify, redirect, render_template, request, send_file, session, url_for
 from werkzeug.exceptions import HTTPException
 from werkzeug.security import check_password_hash
 
@@ -28,6 +28,7 @@ import nodecheck as nc
 MAX_WEB_NODES = 50_000
 MAX_UPLOAD_BYTES = 100 * 1024 * 1024
 ALLOWED_BATCH_SIZES = {100, 500}
+RESULT_IDLE_TTL = 24 * 60 * 60
 
 
 def remove_archive(path):
@@ -150,11 +151,17 @@ def create_app(config=None):
     store = JobStore()
     app.extensions['nodecheck_store'] = store
 
+    def account_owner():
+        return hmac.new(str(app.secret_key).encode(),
+                        ('nodecheck-owner:' + app.config['LOGIN_USER']).encode(), 'sha256').hexdigest()
+
     @app.before_request
     def guards():
         store.cleanup()
         if request.path.startswith('/static/') or request.path == '/healthz':
             return None
+        if session.get('owner'):
+            session['owner'] = account_owner()
         if 'csrf' not in session:
             session['csrf'] = secrets.token_urlsafe(24)
         if request.path != '/login' and not session.get('owner'):
@@ -209,7 +216,9 @@ def create_app(config=None):
             valid_password = check_password_hash(app.config['PASSWORD_HASH'], password)
             if valid_password and hmac.compare_digest(username.encode(), app.config['LOGIN_USER'].encode()):
                 session.clear()
-                session.update(owner=secrets.token_urlsafe(32), csrf=secrets.token_urlsafe(24))
+                # The same authenticated account can recover its pending task
+                # after its browser cookie expires, without storing login history.
+                session.update(owner=account_owner(), csrf=secrets.token_urlsafe(24))
                 session.permanent = True
                 with store.lock:
                     store.attempts.pop(ip, None)
@@ -326,7 +335,7 @@ def create_app(config=None):
                 if key in store.jobs and not job.stop.is_set():
                     job.completed_units = math.ceil(len(nodes) / job.batch_size)
                     job.state = 'done'
-                    job.deadline = time.monotonic() + 900
+                    job.deadline = time.monotonic() + RESULT_IDLE_TTL
         except Exception:
             if archive_path:
                 remove_archive(archive_path)
@@ -334,7 +343,7 @@ def create_app(config=None):
                 job.archive_path = ''
                 job.state = 'error'
                 job.error = '测试未能完成，请清理任务后重试'
-                job.deadline = time.monotonic() + 300
+                job.deadline = time.monotonic() + RESULT_IDLE_TTL
         finally:
             if aggregate_dir:
                 shutil.rmtree(aggregate_dir, ignore_errors=True)
@@ -406,13 +415,32 @@ def create_app(config=None):
             abort(404)
         return job
 
+    def job_status(key, job):
+        now = time.monotonic()
+        # Viewing or downloading results renews their idle retention period.
+        # Requests do not extend the maximum duration of a running test.
+        if job.state in {'done', 'error'}:
+            job.deadline = now + RESULT_IDLE_TTL
+        data = dict(id=key, state=job.state, total=job.total, done=job.done, usable=job.usable,
+                    batch_size=job.batch_size, total_units=math.ceil(job.total / job.batch_size),
+                    completed_units=job.completed_units, issues_count=len(job.issues), error=job.error,
+                    expires_in_seconds=max(0, math.ceil(job.deadline - now)))
+        if request.args.get('summary') != '1':
+            data.update(rows=job.rows, issues=job.issues)
+        return data
+
+    @app.route('/api/jobs/current')
+    def current_job():
+        with store.lock:
+            for key, job in store.jobs.items():
+                if job.owner == session['owner']:
+                    return jsonify(job_status(key, job))
+        return jsonify(id=None)
+
     @app.route('/api/jobs/<key>')
     def status(key):
         with store.lock:
-            job = owned_job(key)
-            return jsonify(state=job.state, total=job.total, done=job.done, usable=job.usable,
-                           batch_size=job.batch_size, total_units=math.ceil(job.total / job.batch_size),
-                           completed_units=job.completed_units, rows=job.rows, issues=job.issues, error=job.error)
+            return jsonify(job_status(key, owned_job(key)))
 
     @app.route('/api/jobs/<key>/download', methods=['POST'])
     def download(key):
@@ -423,13 +451,9 @@ def create_app(config=None):
             archive_path = job.archive_path
             if not archive_path or not Path(archive_path).is_file():
                 return jsonify(error='结果文件已清理，请重新检测'), 410
-            store.jobs.pop(key, None)
-            job.archive_path = ''
-            job.rows.clear()
-        @after_this_request
-        def cleanup(response):
-            remove_archive(archive_path)
-            return response
+            # Starting a response is not proof that the client received or saved
+            # it. Keep the archive available for retries until explicit cleanup.
+            job.deadline = time.monotonic() + RESULT_IDLE_TTL
         return send_file(archive_path, mimetype='application/zip', as_attachment=True, download_name='nodecheck-results.zip', max_age=0)
 
     @app.route('/api/jobs/<key>', methods=['DELETE'])

@@ -11,5 +11,5 @@
   <header class="topbar"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">↗</span> 节点检测台 <span class="brand-en">NODE CHECK</span></a>
   {% if username %}<form action="/logout" method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><span class="account">{{ username }}</span><button class="link-button" type="submit">退出登录</button></form>{% else %}<span class="private-label"><span class="dot"></span>私有工作空间</span>{% endif %}</header>
   {% block content %}{% endblock %}
-  <footer>文件仅用于本次检测 <span>·</span> 不提供历史记录 <span>·</span> 下载后清理结果</footer>
+  <footer>文件仅用于本次检测 <span>·</span> 不提供历史记录 <span>·</span> 确认保存后清理结果</footer>
 </body></html>
