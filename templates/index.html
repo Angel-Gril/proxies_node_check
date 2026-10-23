@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<main class="workspace">
+  <div class="page-heading"><div><div class="eyebrow">CONNECTION WORKSPACE</div><h1>节点检测</h1><p class="intro">上传节点文件，测试连通性，提取可用连接。</p></div><span class="location"><span class="dot"></span>由服务器发起检测</span></div>
+  <ol class="steps" aria-label="检测步骤"><li class="active" id="step-upload"><span>01</span>上传文件</li><li id="step-test"><span>02</span>检测节点</li><li id="step-download"><span>03</span>下载结果</li></ol>
+  <div class="work-grid">
+    <section class="upload-section" aria-labelledby="upload-title"><h2 id="upload-title">待检测文件</h2>
+      <form id="upload-form">
+        <label class="drop-zone" id="drop-zone" for="node-file"><span class="upload-icon" aria-hidden="true">↑</span><strong id="file-label">拖拽文件到这里，或点击选择</strong><span class="file-types">TXT / MD / CSV / JSON / YAML / DOCX</span><span class="small">最多 20 个文件 / 总大小 100 MB / 50000 个去重节点</span><input id="node-file" name="files" type="file" accept=".txt,.md,.csv,.json,.yaml,.yml,.docx" multiple required></label>
+        <div class="option-line"><label for="protocol">无协议前缀的节点按</label><select id="protocol" name="protocol"><option value="http">HTTP 代理</option><option value="socks5">SOCKS5 代理</option></select><span>识别</span><label for="batch-size">检测单位</label><select id="batch-size" name="batch_size"><option value="500">每 500 个</option><option value="100">每 100 个</option></select></div>
+        <button id="start-button" class="primary" type="submit">开始检测 <span aria-hidden="true">↗</span></button>
+      </form>
+      <p class="error" id="message" role="alert" hidden></p>
+      <details class="format-help"><summary>支持哪些节点格式？</summary><p>HTTP / SOCKS 代理链接、IP:端口:账号:密码、Clash 节点、Base64 订阅，以及 SS、VMess、VLESS、Trojan、Hysteria2、TUIC 分享链接。</p><code>http://账号:密码@IP:端口</code><p>无效或暂不支持的格式会在下载报告中注明。连通性结果不能证明 IP 的家宽归属。</p></details>
+    </section>
+    <section class="status-section" aria-labelledby="status-title"><div class="section-heading"><h2 id="status-title">检测状态</h2><span class="state-tag" id="state-label">等待上传</span></div>
+      <div class="progress-number"><strong id="done-number">0</strong><span>/ <span id="total-number">0</span> 个节点</span></div>
+      <progress id="progress" value="0" max="1" aria-label="节点检测进度"></progress>
+      <p class="status-copy" id="status-copy" aria-live="polite">选好文件后，点击开始检测。</p>
+      <div class="result-stats"><div><span class="small">可用节点</span><strong id="usable-number">—</strong></div><div><span class="small">其他节点</span><strong id="other-number">—</strong></div></div>
+      <div class="result-actions"><button id="download-button" class="primary" type="button" disabled>下载结果 ZIP <span aria-hidden="true">↓</span></button><button id="clear-button" class="secondary" type="button" disabled>清理任务</button></div>
+      <p class="retention-note">结果下载后自动清理；未下载的结果最多保留 15 分钟。退出登录会清理当前会话的任务。</p>
+    </section>
+  </div>
+  <section class="results-section" id="results-section" hidden><div class="section-heading"><h2>节点结果</h2><span class="small">账号密码已隐藏</span></div><div class="table-scroll"><table><thead><tr><th>节点地址</th><th>状态</th><th>通过检测</th><th>耗时</th><th>出口 IP</th></tr></thead><tbody id="results-body"></tbody></table></div><p class="small" id="parse-note"></p></section>
+</main>
+{% endblock %}

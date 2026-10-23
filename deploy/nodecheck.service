@@ -1,0 +1,48 @@
+[Unit]
+Description=Private proxy node checker
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=nodecheck
+Group=nodecheck
+WorkingDirectory=/opt/nodecheck/app
+EnvironmentFile=/etc/nodecheck/app.env
+Environment=TMPDIR=/run/nodecheck
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+Environment=MIHOMO_PATH=/opt/nodecheck/bin/mihomo
+ExecStart=/opt/nodecheck/venv/bin/gunicorn --workers 1 --worker-class gthread --threads 8 --bind 127.0.0.1:18765 --timeout 60 --access-logfile /dev/null --error-logfile /dev/null --worker-tmp-dir /run/nodecheck --forwarded-allow-ips 127.0.0.1 'webapp:create_app()'
+Restart=on-failure
+RestartSec=5
+UMask=0077
+RuntimeDirectory=nodecheck
+RuntimeDirectoryMode=0700
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+CapabilityBoundingSet=
+ReadWritePaths=/run/nodecheck
+InaccessiblePaths=/tmp /var/tmp
+IPAddressDeny=169.254.0.0/16
+IPAddressDeny=fc00::/7
+IPAddressDeny=fe80::/10
+MemoryMax=512M
+MemorySwapMax=0
+CPUQuota=100%
+TasksMax=128
+LimitCORE=0
+LimitNOFILE=4096
+StandardOutput=null
+StandardError=null
+
+[Install]
+WantedBy=multi-user.target

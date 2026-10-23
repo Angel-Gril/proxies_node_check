@@ -1,0 +1,15 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ session.get('csrf', '') }}">
+  <title>{% block title %}节点检测台{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='app.css') }}">
+  <script src="{{ url_for('static', filename='app.js') }}" defer></script>
+</head>
+<body>
+  <header class="topbar"><a class="brand" href="/"><span class="brand-icon" aria-hidden="true">↗</span> 节点检测台 <span class="brand-en">NODE CHECK</span></a>
+  {% if username %}<form action="/logout" method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}"><span class="account">{{ username }}</span><button class="link-button" type="submit">退出登录</button></form>{% else %}<span class="private-label"><span class="dot"></span>私有工作空间</span>{% endif %}</header>
+  {% block content %}{% endblock %}
+  <footer>文件仅用于本次检测 <span>·</span> 不提供历史记录 <span>·</span> 下载后清理结果</footer>
+</body></html>

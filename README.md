@@ -1,0 +1,117 @@
+# 节点检测台
+
+从混合文档中提取代理节点，发起真实 HTTPS 请求，标注状态并导出可用节点。支持本地脚本，也支持登录后上传、测试、下载的网页。
+
+## 网页
+
+部署域名：**https://proxies.20260610.xyz**
+
+1. 登录后上传一个或多个 TXT、MD、CSV、JSON、YAML 或 DOCX 文件；同一节点在多个文件中出现时只测试一次。
+2. 对没有协议前缀的 `IP:端口:账号:密码`，选择 HTTP 或 SOCKS5。已有前缀的链接按自身协议识别。
+3. 查看进度和结果，下载 ZIP。下载立即清理服务器中的结果。取消、退出或超时也会清理。
+
+单个文件最多 5 MB、每次最多 20 个文件/总大小 100 MB、50000 个去重节点。每个任务可以选择 100 或 500 个节点作为一个检测单位；服务器一次只执行一个任务，第二个任务排队。任务最长 24 小时；完成后未下载的结果最多保留 15 分钟。清理定时器间隔 10 秒。刷新页面不恢复任务；可退出后重新登录以清理旧任务。
+
+应用不写上传文件或检测历史到磁盘，任务、结果与登录限流信息放在内存中。复杂协议需要的短暂内核配置写入服务器 `/run/nodecheck`（tmpfs），退出内核时删除。服务禁用交换分区和 core dump，专用站点不写访问日志，也不落盘缓存请求或响应。服务管理器可能保留启动/停止状态；Cloudflare 等上游的日志策略需在其后台单独配置。本地命令行模式会按要求保存导出文件。
+
+下载包含：
+
+| 文件 | 内容 |
+| --- | --- |
+| `overall/` | 全部节点的状态、测试明细、可用分享链接、出口 IP、Clash 配置和说明 |
+| `units/unit-XXXX/` | 每个检测单位独立的 `report.csv`、`report.json`、`available.txt`、`exit_ips.txt`、`clash.yaml` 和说明 |
+
+## 支持的输入
+
+```text
+http://username:password@192.0.2.8:3128
+https://username:password@192.0.2.8:443
+socks5://username:password@192.0.2.9:1080
+192.0.2.8:3128:username:password
+192.0.2.8 3128 username password
+http,192.0.2.8,3128,username,password
+```
+
+支持 IPv6、URL 编码密码、SS / VMess / VLESS / Trojan / Hysteria2 / TUIC 常见分享链接、Base64 订阅，以及 Clash `proxies` YAML/JSON。常见 WS、gRPC、Reality 参数会转换。SS、VMess 等需要 **Mihomo**；HTTP/SOCKS 直接使用 curl。未知协议、缺少内核或内核不接受的参数会明确标注，不能保证识别所有厂商的私有分享格式。
+
+只提取文档中的节点，不执行文档中的规则、外部订阅、控制端口或其他程序。网页拒绝内网/本机/保留 IP 以及依赖本地证书或链式代理的节点。普通网站链接不当作节点。裸节点缺乏协议信息，无法可靠自动判断，应使用页面选项或命令行参数。
+
+## 判定方式
+
+默认通过每个节点分别请求 ipify、Cloudflare trace 和 Google 204。每个请求限定超时并校验目标 HTTPS 证书；只接受 2xx。两个 IP 检测站点还需返回有效 IP。三项中至少两项通过记为可用；只通过一项标注 `partial`，不加入可用节点。50k 节点会按选择的 100/500 个检测单位顺序执行，ZIP 同时提供每单位和整体结果。
+
+报告的延迟是**完整请求耗时**，不是 ICMP ping。实际出口 IP 取自检测站点返回，可能不同于代理服务器地址，轮换代理可能返回多个 IP。测试仅反映测试时刻和位置；可用性不证明 IP 的住宅/机房归属，也不代表特定业务网站的解锁状态。
+
+## 本地脚本
+
+要求 Python 3.10+、curl。Windows 10/11 通常自带 curl。
+
+```powershell
+python -m pip install -r requirements.txt
+python nodecheck.py "D:\nodes.txt"
+python nodecheck.py "D:\nodes.txt" --default-protocol socks5
+python nodecheck.py nodes.txt nodes.yaml --rounds 2 --min-success 4 -o results\batch-01
+python nodecheck.py nodes.txt --parse-only
+```
+
+默认按日期创建 `results` 子目录；指定目录需不存在，避免覆盖历史结果。退出码：0=存在可用节点；1=已测试但没有可用节点；2=输入/参数错误。密码中的 `@`、`:` 等建议 URL 编码。
+
+安装固定版本 Mihomo（校验官方 GitHub SHA-256）：
+
+```powershell
+python tools/install_mihomo.py --output .private/mihomo.exe
+python nodecheck.py nodes.yaml --mihomo .private/mihomo.exe
+```
+
+TUN 模式会影响底层网络路由。脚本清除 curl 进程的代理环境变量，显式指定待测代理，但这**不会绕过系统 TUN**。可以关闭 TUN、在代理客户端为测试进程/目标节点配置直连，或将相同脚本放在国外服务器运行。Windows curl 支持用物理网卡的本地 IPv4 指定出口，仍需以真实路由为准：
+
+```powershell
+Get-NetIPAddress -AddressFamily IPv4
+python nodecheck.py nodes.txt --interface 192.168.1.100
+python nodecheck.py nodes.yaml --mihomo .private/mihomo.exe --core-interface "以太网"
+```
+
+Linux：
+
+```sh
+python3 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+.venv/bin/python tools/install_mihomo.py --output .private/mihomo
+.venv/bin/python nodecheck.py nodes.txt --mihomo .private/mihomo
+```
+
+自定义目标：`--target https://example.com --min-success 1`。可重复指定 `--target`；自定义目标只校验 2xx，域名特定的业务校验需另外实现。
+
+## 本地网页与服务器维护
+
+```powershell
+python manage.py setup
+python manage.py serve
+```
+
+访问 `http://127.0.0.1:18765`。`setup` 通过隐藏输入生成密码哈希与会话密钥，保存在 `.private/app.env`；本地启动只绑定 127.0.0.1。
+
+服务器部署使用独立 `/opt/nodecheck`、`/etc/nodecheck`、`nodecheck` 系统用户、`nodecheck.service`、`127.0.0.1:18765` 及 Nginx `nodecheck` 站点；现有服务配置不应改写。`deploy/prepare.sh` 在命名空间/端口已占用时停止，不用于重复覆盖安装。先验证域名挑战文件指向正确服务器，再运行 `deploy/install.sh`。安装脚本需从 `/opt/nodecheck/app` 运行，并预先放置只含哈希的 `/etc/nodecheck/app.env`。
+
+```sh
+systemctl status nodecheck --no-pager
+curl -fsS http://127.0.0.1:18765/healthz
+# 仅停止本应用
+systemctl stop nodecheck
+# 修改账号配置后仅重启本应用（当前内存任务会清空）
+systemctl restart nodecheck
+# Nginx 修改后先校验，再平滑加载
+nginx -t && systemctl reload nginx
+```
+
+停用站点时只移除 `/etc/nginx/sites-enabled/nodecheck` 的链接，再校验并 reload Nginx；不要停止整个 Nginx，也不要修改其他站点。证书用独立 webroot 申请，续期钩子只在本域名证书更新后 reload Nginx。
+
+## 验证
+
+```powershell
+python -m unittest discover -s tests -v
+$env:MIHOMO_PATH = (Resolve-Path .private/mihomo.exe).Path
+python -m unittest discover -s tests -p test_network.py -v
+```
+
+网络集成测试使用本机 TLS 服务与带认证的 HTTP CONNECT 代理，覆盖成功、错误密码、非 2xx、真实 Mihomo 转发和进程清理。TLS 测试夹具需要可选的 `cryptography`；未安装时会明确跳过。还覆盖混合解析、凭据不进报告、会话权限、CSRF、禁止内网目标、结果下载即清理等。

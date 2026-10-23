@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}登录 · 节点检测台{% endblock %}
+{% block content %}
+<main class="login-main">
+  <div class="eyebrow">PRIVATE ACCESS / 01</div>
+  <h1>开始一次<br>节点检测。</h1>
+  <p class="intro">登录后上传文件，筛选真正可用的节点。</p>
+  <form class="login-form" action="/login" method="post">
+    <input type="hidden" name="csrf" value="{{ session.csrf }}">
+    <label for="username">账号</label><input id="username" name="username" autocomplete="username" required maxlength="128" autofocus>
+    <label for="password">密码</label><input id="password" name="password" type="password" autocomplete="current-password" required maxlength="1024">
+    {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+    <button class="primary login-submit" type="submit">进入检测台 <span aria-hidden="true">↗</span></button>
+  </form>
+  <p class="small">仅授权用户可以上传和测试节点。</p>
+</main>
+{% endblock %}

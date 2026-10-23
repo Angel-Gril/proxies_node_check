@@ -1,0 +1,9 @@
+__pycache__/
+.venv/
+.private/
+results/
+*.pem
+*.key
+*.env
+*.tar.gz
+nodecheck-preview*.png
